@@ -1,9 +1,24 @@
 <script>
+    import {onMount} from 'svelte';
     let todoItem = $state('');
     let todoDate = $state();
     let todoList = $state([]);
-    let todayDate = Math.floor(new Date().getTime() / 1000);
-    $inspect(todayDate);
+    let todayDate = $state();
+    //$inspect(todayDate);
+
+    onMount(() => {
+        let storedList = localStorage.getItem("storedList");
+        if (storedList) {
+            todoList = (JSON.parse(storedList));
+        }
+
+        checkDueDates();
+        
+    })
+
+    function updateList() {
+        return localStorage.setItem("storedList", JSON.stringify(todoList));
+    }
 
     // add todoItem to todoList
     function addItem(event) {
@@ -16,18 +31,47 @@
         todoList = [...todoList, {
             text: todoItem,
             dueDate: itemDueDate,
+            dueSoon: false,
+            late: false,
             done: false
         }];
+        checkDueDates();
+        updateList();
         todoItem = '';
+    }
+
+    function checkDueDates() {
+        todayDate = Math.floor(new Date().getTime() / 1000);
+        
+        todoList.forEach(item => {
+            let daysDue = calculateDelta(todayDate, item.dueDate);
+            if (daysDue < 7) {
+                item.dueSoon = true;
+            } 
+            if (daysDue < 0) {
+                item.late = true;
+            }
+        })
     }
 
     // remove todoItem from todoList
     function removeItem(index) {
         todoList.splice(index,1);
+        updateList();
     }
 
     function calculateDelta(date1, date2) {
         return Math.round((date2 - date1) / 86400);
+    }
+
+    function clearAll() {
+        todoList = '';
+        localStorage.clear();
+    }
+
+    function clearDone() {
+        todoList = todoList.filter(item => !item.done);
+        updateList();
     }
 
 </script>
@@ -42,8 +86,17 @@
         <ul>
             {#each todoList as item, index}
                 <li>
-                    <input type="checkbox" bind:checked={item.done}>
-                    <span class:done={item.done}>{item.text}: due in {calculateDelta(todayDate, item.dueDate)} days</span>
+                    <input type="checkbox" bind:checked={item.done} onchange={updateList}>
+                    <span class:done={item.done} class:late={item.late} class:soon={item.dueSoon}>{item.text}: 
+                        {#if item.late}
+                            Late!
+                        {:else if item.dueSoon}
+                            Due Soon!
+                        {:else}
+                            due in {calculateDelta(todayDate, item.dueDate)} days.
+                        {/if}
+                    
+                    </span>
                     <button type="button" onclick={() => removeItem(index)}>&times;</button>
                 </li>
             {/each}
@@ -51,7 +104,8 @@
     </div>
 
 
-
+    <button onclick={clearAll}>Clear List</button>
+    <button onclick={clearDone}>Clear Done</button>
 <style>
     ul {
         list-style: none;
@@ -65,5 +119,11 @@
     li span.done {
         text-decoration: line-through;
         color: grey;
+    }
+    li span.late.soon {
+        color: red;
+    }
+    li span.soon {
+        color: goldenrod;
     }
 </style>
